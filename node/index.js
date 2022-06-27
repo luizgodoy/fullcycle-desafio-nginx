@@ -1,31 +1,72 @@
-const express = require('express')
-const app = express()
-const port = 3000
+const express = require('express');
+const app = express();
+const port = 3000;
+
 const config = {
-    host: 'db',
-    user: 'root',
-    password: 'root',
-    database: 'nodedb'
+  host: 'db',
+  user: 'root',
+  password: 'root',
+  database: 'nodedb',
 };
-const mysql = require('mysql')
-const connection = mysql.createConnection(config)
 
-const sql_create = `CREATE TABLE IF NOT EXISTS people(id int not null auto_increment, name varchar(255), primary key(id))`
-connection.query(sql_create)
+const mysql = require('mysql');
+const connection = mysql.createConnection(config);
 
-const sql_truncate = `TRUNCATE TABLE people`
-connection.query(sql_truncate)
+async function insertPeople(name, callbackFunction) {
+  const sqlCommand = `INSERT INTO people(name) VALUES('${name}')`;
+  if (!name || !connection) return;
 
-const sql_insert = `INSERT INTO people(name) values('Godoy')`
-connection.query(sql_insert)
+  await connection.query(sqlCommand, callbackFunction);
+}
 
-connection.end()
+async function createTablePeopleIfNotExists() {
+  const sqlCommand =
+    'CREATE TABLE IF NOT EXISTS people(id int not null auto_increment,name varchar(255), primary key(id));';
 
+  await connection.query(sqlCommand, (err, result, fields) => {
+    if (err) throw err;
+  });
+}
 
-app.get('/', (req, res) => {
-    res.send('<h1>Full Cycle Rocks!</h1>')
-})
+async function getPeople(callbackFunction) {
+  const sqlQuery = `SELECT * FROM people`;
+  if (!connection) return;
 
-app.listen(port, () => {
-    console.log('Rodando na porta ' + port)
-})
+  await connection.query(sqlQuery, callbackFunction);
+}
+
+app.get('/', async (req, res) => {
+  await getPeople((err, result, fields) => {
+    if (err) throw err;
+    const str = result[0].id + ' - ' + result[0].name;   
+    res.send(`<h1>Full Cycle Rocks!</h1><h3>${str}</h3>`);
+  });
+});
+
+app.post('/command/:name', async (req, res) => {
+  const { name } = req.params;
+  if (!name) {
+    res.statusCode = 406;
+    res.send();
+  }
+
+  await insertPeople(name, (err, result, fields) => {
+    if (err) throw err;
+    res.statusCode = 200;
+    res.send();
+  });
+
+  res.statusCode = 500;
+  res.send();
+});
+
+app.listen(port, async () => {
+  console.log('Creating table People (if no exists yet only)');
+  await createTablePeopleIfNotExists();
+  const name = 'People-FullCycle';
+  console.log('Insert people with name: ' + name);
+  await insertPeople(name, (err, result, fields) => {
+    if (err) throw err;
+  });
+  console.log(`Server listening on port ${port}`);
+});
